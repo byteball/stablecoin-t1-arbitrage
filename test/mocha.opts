@@ -1,0 +1,5 @@
+# mocha.opts
+	--bail
+	--exit
+	--slow 20000
+	--require test/bootload.js

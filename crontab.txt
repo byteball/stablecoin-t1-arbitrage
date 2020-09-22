@@ -1,0 +1,1 @@
+*/20 * * * * cd stablecoin-t1-arbitrage; node check_daemon.js 1>>~/.config/stablecoin-t1-arbitrage/check_daemon.log 2>>~/.config/stablecoin-t1-arbitrage/check_daemon.err

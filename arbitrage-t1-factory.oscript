@@ -1,0 +1,107 @@
+{
+	doc_url: "https://ostable.org/stablecoin-t1-arbitrage-factory.json",
+	init: `{
+		$arbitrage_base_aa = '7DTJZNB3MHSBVI72CKXRIKONJYBV7I2Z';
+	}`,
+	messages: {
+		cases: [
+
+			// accept a callback from a newly created arbitrage AA to record its newly defined shares asset
+			{
+				if: `{var['creating']}`,
+				messages: [
+					{
+						app: 'state',
+						state: `{
+							$params = var['arb_' || trigger.address];
+							$params.shares_asset = trigger.unit;
+							var['arb_' || trigger.address] = $params;
+							var['creating'] = false;
+						}`
+					}
+				]
+			},
+
+			// create a new arbitrage AA
+			{
+				init: `{
+					if (!is_aa(trigger.data.curve_aa))
+						bounce("curve_aa must be an AA");
+					$reserve_asset = definition[trigger.data.curve_aa][1].params.reserve_asset OTHERWISE 'base';
+					$asset1 = var[trigger.data.curve_aa]['asset1'];
+					$asset2 = var[trigger.data.curve_aa]['asset2'];
+					
+					$params = {
+						curve_aa: trigger.data.curve_aa,
+					};
+
+					$governance_params = [
+						'max_reserve_share',
+						'min_reserve_share',
+						'triggerer_reward_share',
+						'min_reserve_delta',
+					];
+					foreach($governance_params, 4, $p => {
+						$value = trigger.data[$p]; // use AA default if missing
+						if (exists($value)) {
+							if ($p == 'min_reserve_delta'){
+								if (!is_integer($value) OR $value < 0)
+									bounce("bad " || $p);
+							}
+							else {
+								if (typeof($value) != 'number' OR $value < 0 OR $value > 1)
+									bounce("bad " || $p);
+							}
+							$params[$p] = $value;
+						}
+					});
+
+					$arbitrage_aa = [
+						'autonomous agent',
+						{
+							base_aa: $arbitrage_base_aa,
+							params: $params
+						}
+					];
+					$arbitrage_aa_address = chash160($arbitrage_aa);
+				}`,
+				messages: [
+					{
+						app: 'payment',
+						payload: {
+							asset: 'base',
+							outputs: [
+								{ address: "{ $arbitrage_aa_address }", amount: 4000 }, // I'll get all this money back (minus fees)
+							]
+						}
+					},
+					{
+						app: 'data',
+						payload: {
+							define: 1,
+							factory: `{this_address}`
+						}
+					},
+					{
+						app: 'definition',
+						payload: {
+							definition: `{$arbitrage_aa}`
+						}
+					},
+					{
+						app: 'state',
+						state: `{
+							$params.reserve_asset = $reserve_asset;
+							$params.asset1 = $asset1;
+							$params.asset2 = $asset2;
+							var['arb_' || $arbitrage_aa_address] = $params;
+							var['creating'] = 1;
+							response['address'] = $arbitrage_aa_address;
+						}`
+					}
+				]
+
+			}
+		]
+	}
+}

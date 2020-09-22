@@ -1,0 +1,393 @@
+{
+	doc_url: "https://ostable.org/stablecoin-t1-arbitrage.json",
+	getters: `{
+		$get_curve_aa = () => params.curve_aa;
+	}`,
+	init: `{
+		$curve_aa = $get_curve_aa();
+		$curve_params = definition[params.curve_aa][1].params;
+
+		// tokens
+		$reserve_asset = $curve_params.reserve_asset OTHERWISE 'base';
+		$asset1 = var[$curve_aa]['asset1'];
+		$shares_asset = var['shares_asset'];
+
+		$get_leverage = () => $curve_params.leverage OTHERWISE 0;
+		$dilution_factor = var[$curve_aa]['dilution_factor'];
+
+		$get_reserve = ($s1, $s2) => {
+			$r = $dilution_factor * $s1^$curve_params.m * $s2^$curve_params.n;
+			$r
+		};
+
+		$get_p2 = ($s1, $s2) => {
+			$p2 = $dilution_factor * $s1^$curve_params.m * $curve_params.n * (is_integer($curve_params.n*2) ? sqrt($s2^(($curve_params.n-1)*2)) : $s2^($curve_params.n-1) ); // derivative
+			$p2
+		};
+
+		$get_p1 = () => {
+			$s1 = var[$curve_aa]['supply1']/10^$curve_params.decimals1;
+			$s2 = var[$curve_aa]['supply2']/10^$curve_params.decimals2;
+			$p1_in_full_units = $dilution_factor * $curve_params.m * $s1^($curve_params.m-1) * $s2^$curve_params.n; // derivative
+			$p1_in_smallest_units = $p1_in_full_units * 10^($curve_params.reserve_asset_decimals - $curve_params.decimals1);
+			$p1_in_smallest_units
+		};
+
+		$get_oracles = () => {
+			$oracles = var[$curve_aa]['oracles'];
+			if ($oracles)
+				return $oracles;
+			$initial_oracles = [];
+			if ($curve_params.oracle1 AND $curve_params.feed_name1)
+				$initial_oracles[] = {oracle: $curve_params.oracle1, feed_name: $curve_params.feed_name1, op: $curve_params.op1 OTHERWISE '*'};
+			if ($curve_params.oracle2 AND $curve_params.feed_name2)
+				$initial_oracles[] = {oracle: $curve_params.oracle2, feed_name: $curve_params.feed_name2, op: $curve_params.op2 OTHERWISE '*'};
+			if ($curve_params.oracle3 AND $curve_params.feed_name3)
+				$initial_oracles[] = {oracle: $curve_params.oracle3, feed_name: $curve_params.feed_name3, op: $curve_params.op3 OTHERWISE '*'};
+			$initial_oracles
+		};
+
+		$get_initial_interest_rate = () => exists($curve_params.interest_rate) ? $curve_params.interest_rate : 0.1; // 10%
+
+		$get_interest_rate = () => {
+			$interest_rate_var = var[$curve_aa]['interest_rate'];
+			exists($interest_rate_var) ? $interest_rate_var : $get_initial_interest_rate()
+		};
+
+		$get_growth_factor = () => {
+			$interest_rate = $get_interest_rate();
+			$term = (timestamp - var[$curve_aa]['rate_update_ts']) / (360 * 24 * 3600); // in years
+			$growth_factor = var[$curve_aa]['growth_factor'] * (1 + $interest_rate)^$term;
+			$growth_factor
+		};
+
+		$get_oracle_price = () => {
+			$oracles = $get_oracles();
+			$oracle_price = reduce($oracles, 3, ($price, $oracle_info) => {
+				$df = data_feed[[oracles=$oracle_info.oracle, feed_name=$oracle_info.feed_name]];
+				($oracle_info.op == '*') ? $price * $df : $price / $df
+			}, 1);
+			$oracle_price
+		};
+
+		$get_target_p2 = () => {
+			$target_p2 = $get_oracle_price()^($get_leverage() - 1) * $get_growth_factor();
+			$target_p2
+		};
+
+		$get_exchange_data = () => {
+			$target_p2 = $get_target_p2();
+			$s2 = var[$curve_aa]['supply2']/10^$curve_params.decimals2;
+			$target_s1 = ($target_p2/$curve_params.n * $s2^(1-$curve_params.n))^(1/$curve_params.m);
+			$tokens1_delta = round($target_s1 * 10^$curve_params.decimals1) - var[$curve_aa]['supply1'];
+			$new_s1 = (var[$curve_aa]['supply1'] + $tokens1_delta) / 10^$curve_params.decimals1;
+			$reserve_delta = ceil($get_reserve($new_s1, $s2) * 10^$curve_params.reserve_asset_decimals) - var[$curve_aa]['reserve'];
+
+			// calc the reward
+			$initial_p2 = var[$curve_aa]['p2'];
+			$distance = abs($initial_p2 - $target_p2) / $target_p2;
+			$p2 = $get_p2($new_s1, $s2); // might be slightly different from target_p2 due to limited precision of s1
+			$new_distance = abs($p2 - $target_p2) / $target_p2; // zero or very close
+			$reward = floor((1 - $new_distance/$distance) * var[$curve_aa]['fast_capacity']);
+			$reserve_needed = $reserve_delta - $reward + ($reserve_asset == 'base' ? 1000 : 0);
+
+			{
+				tokens1_delta: $tokens1_delta,
+				reserve_delta: $reserve_delta,
+				reserve_needed: $reserve_needed,
+				reward: $reward,
+			}
+		};
+
+		$p1 = $get_p1();
+
+		$get_total_assets = () => {
+			balance[$reserve_asset] - trigger.output[[asset=$reserve_asset]] + $p1 * (balance[$asset1] - trigger.output[[asset=$asset1]])
+		};
+
+		$get_reserve_share_after = ($delta_reserve, $delta_asset1) => {
+			(balance[$reserve_asset] - $delta_reserve) / (balance[$reserve_asset] - $delta_reserve + $p1 * (balance[$asset1] - $delta_asset1))
+		};
+
+
+		$status = var['status'];
+
+		$max_reserve_share = var['max_reserve_share'] OTHERWISE params.max_reserve_share OTHERWISE 1;
+		$min_reserve_share = exists(var['min_reserve_share']) ? var['min_reserve_share'] : (params.min_reserve_share OTHERWISE 0);
+		$triggerer_reward_share = exists(var['triggerer_reward_share']) ? var['triggerer_reward_share'] : (params.triggerer_reward_share OTHERWISE 0);
+		$min_reserve_delta = var['min_reserve_delta'] OTHERWISE params.min_reserve_delta OTHERWISE 1e5;
+
+		$min_reserve_investment = $reserve_asset == 'base' ? 1e4 : 0;
+
+		if (trigger.data.to AND !is_valid_address(trigger.data.to))
+			bounce("bad to address");
+		$to = trigger.data.to OTHERWISE trigger.address;
+
+		$governance_base_aa = 'P5CS22H3DNZ35RTY7TFAGRUDQRHRIK7T';
+	}`,
+	messages: {
+		cases: [
+
+			// define the shares asset
+			{
+				if: `{ trigger.data.define AND !$shares_asset }`,
+				messages: [
+					{
+						app: 'asset',
+						payload: {
+							// without cap
+							is_private: false,
+							is_transferrable: true,
+							auto_destroy: false,
+							fixed_denominations: false,
+							issued_by_definer_only: true,
+							cosigned_by_definer: false,
+							spender_attested: false,
+						}
+					},
+					{ // call back to the factory to let it know our shares asset
+						if: `{trigger.data.factory}`,
+						app: 'payment',
+						payload: {
+							asset: 'base',
+							outputs: [
+								{address: '{trigger.data.factory}', amount: 1000}, // send all
+							]
+						}
+					},
+					{ // define governance AA
+						app: 'definition',
+						payload: {
+							definition: [
+								'autonomous agent',
+								{
+									base_aa: `{$governance_base_aa}`,
+									params: {
+										arb_aa: `{this_address}`,
+										challenging_period: `{params.challenging_period}`,
+										freeze_period: `{params.freeze_period}`,
+									}
+								}
+							]
+						}
+					},
+					{
+						app: 'state',
+						state: `{
+							var['governance_aa'] = unit[response_unit].messages[[.app='definition']].payload.address;
+							var['shares_asset'] = response_unit;
+							response['shares_asset'] = response_unit;
+						}`
+					}
+				]
+			},
+
+			{ // accept variable changes from the governance AA
+				if: `{ $shares_asset AND trigger.address == var['governance_aa'] AND trigger.data.name }`, // trigger.data.value can be falsy
+				init: `{
+					$name = trigger.data.name;
+				}`,
+				messages: [
+					{
+						app: 'state',
+						state: `{
+							var[$name] = trigger.data.value;
+						}`
+					}
+				]
+			},
+
+			// do the arbitrage: try to move the price as close to the peg as possible
+			{
+				if: `{ trigger.data.arb }`,
+				init: `{
+					$data = $get_exchange_data();
+					$tokens1 = $data.tokens1_delta;
+					if (abs($tokens1) <= 1)
+						bounce("already on-peg");
+					if (abs($data.reserve_delta) < $min_reserve_delta)
+						bounce("reserve delta would be too small: " || $data.reserve_delta);
+					$triggerer_reward = floor($triggerer_reward_share * $data.reward);
+				}`,
+				messages: [
+					{
+						app: 'payment',
+						payload: {
+							asset: `{$reserve_asset}`,
+							outputs: [
+								{if: '{$tokens1 > 0}', address: "{$curve_aa}", amount: "{ $data.reserve_needed }"},
+								{if: '{$triggerer_reward > 100}', address: "{trigger.address}", amount: "{ $triggerer_reward }"},
+							]
+						}
+					},
+					{
+						if: '{$tokens1 > 0}',
+						app: 'data',
+						payload: {
+							tokens1: `{$tokens1}`,
+						}
+					},
+					{
+						if: '{$tokens1 < 0}',
+						app: 'payment',
+						payload: {
+							asset: `{$asset1}`,
+							outputs: [
+								{address: "{$curve_aa}", amount: "{ -$tokens1 }"}
+							]
+						}
+					},
+					{
+						app: 'state',
+						state: `{
+							var['status'] = 'arbing';
+							var['expected_asset1_amount'] = $tokens1 > 0 ? $tokens1 : 0;
+							var['expected_reserve_amount'] = $tokens1 < 0 ? -$data.reserve_needed : 0;
+						}`
+					}
+				]
+			},
+
+
+			// receive proceeds in asset1 or reserve asset from the curve AA and finish
+			{
+				if: `{ trigger.address == $curve_aa AND (trigger.output[[asset=$asset1]] > 0 OR trigger.output[[asset=$reserve_asset]] > 0) AND $status AND $status == 'arbing' }`,
+				init: `{
+					$received_asset1_amount = trigger.output[[asset=$asset1]];
+					$expected_asset1_amount = var['expected_asset1_amount'];
+					if ($expected_asset1_amount != $expected_asset1_amount)
+						bounce("wrong asset1 amount received from curve AA: expected " || $expected_asset1_amount || ", got " || $received_asset1_amount);
+					$received_reserve_amount = trigger.output[[asset=$reserve_asset]];
+					$expected_reserve_amount = var['expected_reserve_amount'];
+					if ($expected_reserve_amount != $expected_reserve_amount)
+						bounce("wrong reserve amount received from curve AA: expected " || $expected_reserve_amount || ", got " || $received_reserve_amount);
+				}`,
+				messages: [
+					{
+						app: 'state',
+						state: `{
+							var['expected_asset1_amount'] = false;
+							var['expected_reserve_amount'] = false;
+							var['status'] = false;
+						}`
+					}
+				]
+			},
+
+
+			// buy shares from the AA
+			{
+				if: `{ $shares_asset AND (trigger.output[[asset=$reserve_asset]] > 0 OR trigger.output[[asset=$asset1]] > 0) AND trigger.output[[asset=$shares_asset]] == 0 }`,
+				init: `{
+					if (var['investments_paused'])
+						bounce("investments paused by governance decision");
+					$received_reserve_amount = trigger.output[[asset=$reserve_asset]] > $min_reserve_investment ? trigger.output[[asset=$reserve_asset]] : 0;
+					$received_asset1_amount = trigger.output[[asset=$asset1]];
+					$shares_supply = var['shares_supply'] OTHERWISE 0;
+
+					$balance = $get_total_assets(); // before the purchase
+					$received_asset1_value = $p1 * $received_asset1_amount;
+					$received_assets = $received_reserve_amount + $received_asset1_value;
+					if ($received_assets == 0)
+						bounce("0 contribution");
+
+					if ($shares_supply > 0){
+						if ($balance == 0)
+							bounce("shares_supply > 0 AND balance == 0");
+						$reserve_share = $get_reserve_share_after(0, 0);
+						$received_reserve_share = $received_reserve_amount/$received_assets;
+						$type = ($received_reserve_share > $reserve_share) ? 'reserve_share_up' : 'reserve_share_down';
+						if ($reserve_share > $max_reserve_share AND $type != 'reserve_share_down')
+							bounce("the reserve share is too large and only proportional or T1 contributions (or anything in between) are allowed");
+						if ($reserve_share < $min_reserve_share AND $type != 'reserve_share_up')
+							bounce("the T1 share is too large and only proportional or reserve contributions (or anything in between) are allowed");
+					}
+					$share_price = $shares_supply ? $balance / $shares_supply : 1;
+					$shares_amount = floor($received_assets / $share_price);
+				}`,
+				messages: [
+					{
+						app: 'payment',
+						payload: {
+							asset: '{$shares_asset}',
+							outputs: [
+								{address: "{$to}", amount: "{$shares_amount}"}
+							]
+						}
+					},
+					{
+						app: 'state',
+						state: `{
+							var['shares_supply'] += $shares_amount;
+						}`
+					}
+				]
+			},
+
+			// redeem shares
+			{
+				if: `{ $shares_asset AND trigger.output[[asset=$shares_asset]] > 0 }`,
+				init: `{
+					$what = trigger.data.what OTHERWISE 'both';
+					if ($what != 't1' AND $what != 'reserve' AND $what != 'both')
+						bounce('bad type of asset to withdraw: ' || $what);
+					$received_shares_amount = trigger.output[[asset=$shares_asset]];
+					$shares_supply = var['shares_supply'];
+					$balance = $get_total_assets();
+					if ($balance < 0)
+						bounce("balance < 0");
+					if ($shares_supply > 0 AND $balance == 0)
+						bounce("shares_supply > 0 AND balance == 0");
+					if ($what == 'both'){
+						$reserve_amount = floor($received_shares_amount/$shares_supply * (balance[$reserve_asset] - $min_reserve_investment));
+						$asset1_amount = floor($received_shares_amount/$shares_supply * balance[$asset1]);
+					}
+					else{ // single-token redemptions
+						$share_price = $balance / $shares_supply;
+						if ($what == 'reserve'){
+							$reserve_amount = floor($received_shares_amount * $share_price);
+							$asset1_amount = 0;
+						}
+						else{
+							$reserve_amount = 0;
+							$asset1_amount = floor($received_shares_amount * $share_price / $p1);
+						}
+						$reserve_share = $get_reserve_share_after($reserve_amount, $asset1_amount);
+						if ($reserve_share < $min_reserve_share AND $what == 'reserve')
+							bounce("the reserve share is too small and only proportional or T1 withdrawals are allowed");
+						if ($reserve_share > $max_reserve_share AND $what == 't1')
+							bounce("the T1 share is too small and only proportional or reserve withdrawals are allowed");
+					}
+				}`,
+				messages: [
+					{
+						app: 'payment',
+						payload: {
+							asset: '{$reserve_asset}',
+							outputs: [
+								{address: "{$to}", amount: "{$reserve_amount}"}
+							]
+						}
+					},
+					{
+						app: 'payment',
+						payload: {
+							asset: '{$asset1}',
+							outputs: [
+								{address: "{$to}", amount: "{$asset1_amount}"}
+							]
+						}
+					},
+					{
+						app: 'state',
+						state: `{
+							var['shares_supply'] -= $received_shares_amount;
+						}`
+					}
+				]
+			},
+
+
+		]
+	}
+}

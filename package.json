@@ -1,0 +1,34 @@
+{
+  "name": "stablecoin-t1-arbitrage",
+  "version": "0.1.0",
+  "scripts": {
+    "test": "mocha --opts test/mocha.opts --require test/bootload.js",
+    "test:all": "mocha --opts test/mocha.opts --require test/bootload.js test/*.test.oscript.js",
+    "lint": "node ./node_modules/.bin/eslint --ext .js --max-warnings=0 test"
+  },
+  "engines": {
+    "node": ">=12"
+  },
+  "dependencies": {
+    "aa-testkit": "git+https://github.com/valyakin/aa-testkit.git",
+    "aabot": "git+https://github.com/byteball/aabot.git",
+    "bonded-stablecoin": "git+https://github.com/byteball/bonded-stablecoin.git",
+    "chai": "^4.2.0",
+    "mocha": "^6.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^6.3.0",
+    "eslint-config-standard": "^14.1.0",
+    "eslint-plugin-chai-friendly": "^0.4.1",
+    "eslint-plugin-import": "^2.18.2",
+    "eslint-plugin-mocha": "^6.1.1",
+    "eslint-plugin-node": "^10.0.0",
+    "eslint-plugin-promise": "^4.2.1",
+    "eslint-plugin-standard": "^4.0.1"
+  },
+  "resolutions": {
+    "level-rocksdb": "^4.0.0",
+    "chalk": "^3.0.0",
+    "cli-width": "^2.2.1"
+  }
+}
