@@ -24,8 +24,8 @@ exports.bWantNewPeers = true;
 exports.KEYS_FILENAME = 'keys.json';
 
 // TOR
-//exports.socksHost = '127.0.0.1';
-//exports.socksPort = 9050;
+exports.socksHost = '127.0.0.1';
+exports.socksPort = 9050;
 
 exports.bNoPassphrase = true;
 
