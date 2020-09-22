@@ -101,7 +101,7 @@ function onAARequest(objAARequest) {
 	else if (buffers[aa_address] === curve_aa) {
 		const objUnit = objAARequest.unit;
 		const dataMessage = objUnit.messages.find(m => m.app === 'data');
-		if (dataMessage.payload.execute)
+		if (dataMessage && dataMessage.payload.execute)
 			console.log(`new request to buffer ${aa_address} on the curve ${curve_aa}, will check for arb opportunities`);
 		else
 			return console.log(`new request to deposit funds to buffer ${aa_address} on the curve ${curve_aa}, will skip`);
