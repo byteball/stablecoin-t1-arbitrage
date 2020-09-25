@@ -56,7 +56,7 @@ Investors can tune the following parameters by voting to change their values:
 * `triggerer_reward_share`: the share of the reward paid by the curve AA for moving the price to the peg that is paid to the triggerer of the arbitrage trade. The companion bot tries to be that triggerer but the AA can be triggered by anybody. Default: 0.
 * `investments_paused`: this parameter can be set to 1 to stop accepting new contributions to the pool in order not to dilute the current investors. This can make sense if the current investors think that there is limited profit to be made on the market and don't want to divide the pie among a bigger number of investors. Default: 0.
 
-The initial values of these parameters can be set when triggering the factory to create the arbitrage AA.
+The initial values of these parameters are set when triggering the factory to create the arbitrage AA.
 
 Later changes can be decided on by the investors through a governance AA that is created at the same time the main arbitrage AA is created. The mechanism for decision making is **challenger voting** - the same mechanism that is used in [bonded stablecoins](https://medium.com/obyte/using-multi-dimensional-bonding-curves-to-create-stablecoins-81e857b4355c) governance.
 
