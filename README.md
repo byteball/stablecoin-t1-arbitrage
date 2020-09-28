@@ -25,7 +25,12 @@ yarn test
 
 Use your Obyte wallet to send a transaction to the factory AA **I3EA42PJ352JBF5EGOXV2UYT46WCAUEJ**. It has only one required parameter `curve_aa`, which is the AA of the curve the bot will be trading on (see the Governance section below for a full list of parameters). The factory will create a new arbitrage AA, this is the AA that will store the funds of investors. The bot will issue `arb` commands to this AA when it sees an arbitrage opportunity.
 
-Specify this arbitrage AA as `arb_aa` in your conf.json.
+Add this arbitrage AA to the `arb_aas` array in your conf.json. A single bot can manage several arb AAs:
+```json
+{
+        "arb_aas": ["PVL22DMGM57FOYKJRPKMQBFM2BUSJLDU", "Y3NP6UMNFMA6DU2DGPJN4HB65KHKVAKR", "YSGAUS4DWUORJMV3TEZXPCAEFCT4FGO3"]
+}
+```
 
 ### Running the arbitrage bot
 
