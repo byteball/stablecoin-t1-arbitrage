@@ -74,20 +74,21 @@ async function estimateAndArb(arb_aa) {
 	console.log(`--- estimated responses to simulated arb request`, JSON.stringify(arrResponses, null, 2));
 	aa_unlock();
 	if (arrResponses[0].bounced)
-		return finish(`would bounce: ` + arrResponses[0].response.error);
+		return finish(`${arb_aa}/${curve_aa} would bounce: ` + arrResponses[0].response.error);
 	const balances = upcomingBalances[arb_aa];
 	for (let asset in balances)
 		if (balances[asset] < 0)
-			return finish(`${asset} balance would become negative: ${balances[asset]}`);
+			return finish(`${arb_aa}/${curve_aa}: ${asset} balance would become negative: ${balances[asset]}`);
 	const reserve_delta = arrResponses[0].updatedStateVars[curve_aa].reserve.delta;
 	if (Math.abs(reserve_delta) < conf.min_reserve_delta)
-		return finish(`too small reserve delta: ` + reserve_delta);
+		return finish(`${arb_aa}/${curve_aa}: too small reserve delta: ` + reserve_delta);
+	console.log(`estimateAndArb: ${arb_aa}/${curve_aa} would succeed`);
 	const unit = await dag.sendAARequest(arb_aa, { arb: 1 });
 	if (!unit)
 		return finish(`sending arb request failed`);
 	const objJoint = await dag.readJoint(unit);
 	// upcoming state vars are updated and the next request will see them
-	console.log(`estimateAndArb: calling onAARequest manually`);
+	console.log(`estimateAndArb: ${arb_aa}/${curve_aa} calling onAARequest manually`);
 	await aa_state.onAARequest({ unit: objJoint.unit, aa_address: arb_aa });
 	unlock();
 }
