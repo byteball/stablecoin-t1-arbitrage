@@ -11,8 +11,8 @@ const arb = require('./arb.js');
 eventBus.on('headless_wallet_ready', async () => {
 	await operator.start();
 
-	if (!conf.arb_aa)
-		throw Error("Please specify arb_aa in conf.json");
+	if (!conf.arb_aas)
+		throw Error("Please specify arb_aas in conf.json");
 
 	network.start();
 	await arb.startWatching();
