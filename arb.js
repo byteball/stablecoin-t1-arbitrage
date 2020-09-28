@@ -40,8 +40,8 @@ async function estimateAndArbAll() {
 
 async function estimateAndArb(arb_aa) {
 	const unlock = await mutex.lock('estimate');
-	console.log('===== estimateAndArb');
 	const curve_aa = curvesByArb[arb_aa];
+	console.log('===== estimateAndArb arb ' + arb_aa + ' on curve ' + curve_aa);
 	const finish = msg => {
 		console.log(msg);
 		unlock();
