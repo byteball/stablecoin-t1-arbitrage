@@ -75,6 +75,10 @@ async function estimateAndArb(arb_aa) {
 	aa_unlock();
 	if (arrResponses[0].bounced)
 		return finish(`would bounce: ` + arrResponses[0].response.error);
+	const balances = upcomingBalances[arb_aa];
+	for (let asset in balances)
+		if (balances[asset] < 0)
+			return finish(`${asset} balance would become negative: ${balances[asset]}`);
 	const reserve_delta = arrResponses[0].updatedStateVars[curve_aa].reserve.delta;
 	if (Math.abs(reserve_delta) < conf.min_reserve_delta)
 		return finish(`too small reserve delta: ` + reserve_delta);
