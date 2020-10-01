@@ -32,6 +32,7 @@ exports.bNoPassphrase = true;
 exports.explicitStart = true;
 
 exports.min_reserve_delta = 1e8;
+exports.min_distance_delta = 1e-3;
 
 exports.arb_aas = ['']; // set in conf.json
 exports.buffer_base_aa = 'VXY4L4NGFQ773NOQKUFFVJEWLZUBCYHI';

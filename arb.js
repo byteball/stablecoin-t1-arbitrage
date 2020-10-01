@@ -79,9 +79,13 @@ async function estimateAndArb(arb_aa) {
 	for (let asset in balances)
 		if (balances[asset] < 0)
 			return finish(`${arb_aa}/${curve_aa}: ${asset} balance would become negative: ${balances[asset]}`);
-	const reserve_delta = arrResponses[0].updatedStateVars[curve_aa].reserve.delta;
-	if (Math.abs(reserve_delta) < conf.min_reserve_delta)
-		return finish(`${arb_aa}/${curve_aa}: too small reserve delta: ` + reserve_delta);
+	const vars = arrResponses[0].updatedStateVars[curve_aa];
+//	const reserve_delta = vars.reserve.delta;
+//	if (Math.abs(reserve_delta) < conf.min_reserve_delta)
+//		return finish(`${arb_aa}/${curve_aa}: too small reserve delta: ` + reserve_delta);
+	const distance_delta = vars.p2.delta / vars.p2.value;
+	if (Math.abs(distance_delta) < conf.min_distance_delta)
+		return finish(`${arb_aa}/${curve_aa}: too small distance delta: ` + distance_delta);
 	console.log(`estimateAndArb: ${arb_aa}/${curve_aa} would succeed`);
 	const unit = await dag.sendAARequest(arb_aa, { arb: 1 });
 	if (!unit)
