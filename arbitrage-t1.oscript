@@ -220,6 +220,16 @@
 							]
 						}
 					},
+					{ // pay some bytes to make sure the curve AA can respond to us
+						if: '{$reserve_asset != 'base'}',
+						app: 'payment',
+						payload: {
+							asset: `base`,
+							outputs: [
+								{address: "{$curve_aa}", amount: 2000},
+							]
+						}
+					},
 					{
 						if: '{$tokens1 > 0}',
 						app: 'data',

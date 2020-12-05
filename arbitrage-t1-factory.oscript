@@ -1,7 +1,7 @@
 {
 	doc_url: "https://ostable.org/stablecoin-t1-arbitrage-factory.json",
 	init: `{
-		$arbitrage_base_aa = '7DTJZNB3MHSBVI72CKXRIKONJYBV7I2Z';
+		$arbitrage_base_aa = 'WQBLYBRAMJVXDWS7BGTUNUTW2STO6LYP';
 	}`,
 	messages: {
 		cases: [
