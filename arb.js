@@ -155,9 +155,11 @@ async function startWatching() {
 	}
 
 	// init the buffers linked to this curve
-	await dag.loadAA(conf.buffer_base_aa);
-	network.addLightWatchedAa(conf.buffer_base_aa); // to learn when new buffer AAs are defined based on it
-	const rows = await dag.getAAsByBaseAAs([conf.buffer_base_aa]);
+	for (let aa of conf.buffer_base_aas) {
+		await dag.loadAA(aa);
+		network.addLightWatchedAa(aa); // to learn when new buffer AAs are defined based on it
+	}
+	const rows = await dag.getAAsByBaseAAs(conf.buffer_base_aas);
 	for (let row of rows) {
 		let curve_aa = row.definition[1].params.curve_aa;
 		if (curves[curve_aa])
@@ -166,11 +168,13 @@ async function startWatching() {
 
 	eventBus.on("aa_request_applied", onAARequest);
 	eventBus.on("aa_response_applied", onAAResponse);
-	eventBus.on("aa_definition_applied-" + conf.buffer_base_aa, async (address, definition) => {
-		let curve_aa = definition[1].params.curve_aa;
-		if (curves[curve_aa])
-			await addBuffer(address, curve_aa);
-	});
+	for (let aa of conf.buffer_base_aas) {
+		eventBus.on("aa_definition_applied-" + aa, async (address, definition) => {
+			let curve_aa = definition[1].params.curve_aa;
+			if (curves[curve_aa])
+				await addBuffer(address, curve_aa);
+		});
+	}
 	eventBus.on('data_feeds_updated', estimateAndArbAll);
 
 	setTimeout(estimateAndArbAll, 1000);

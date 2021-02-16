@@ -35,7 +35,7 @@ exports.min_reserve_delta = 1e8;
 exports.min_distance_delta = 1e-3;
 
 exports.arb_aas = ['']; // set in conf.json
-exports.buffer_base_aa = 'VXY4L4NGFQ773NOQKUFFVJEWLZUBCYHI';
+exports.buffer_base_aas = ['VXY4L4NGFQ773NOQKUFFVJEWLZUBCYHI', '6UZ3XA5M6B6ZL5YSBLTIDCCVAQGSYYWR'];
 
 
 console.log('finished arb conf');
